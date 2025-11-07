@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -6,10 +6,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
-import { FileManager } from "@/components/FileManager";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Console } from "@/components/Console";
+import { EnhancedFileManager } from "@/components/EnhancedFileManager";
+import { GitHubIntegration } from "@/components/GitHubIntegration";
+import { EnhancedPackageManager } from "@/components/EnhancedPackageManager";
+import { EnvVarsManager } from "@/components/EnvVarsManager";
+import { RuntimeConfig } from "@/components/RuntimeConfig";
+import { ResourceMetrics } from "@/components/ResourceMetrics";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { StatusIndicator } from "@/components/StatusIndicator";
-import { ArrowLeft, Play, Square, RotateCw } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { BotStatus } from "@/components/StatusIndicator";
 
 export default function BotDetail() {
@@ -17,6 +24,8 @@ export default function BotDetail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [logs, setLogs] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState("console");
 
   // Redirect if not authenticated - referenced from blueprint:javascript_log_in_with_replit
   useEffect(() => {
@@ -42,6 +51,23 @@ export default function BotDetail() {
     queryKey: ["/api/bots", id, "files"],
     enabled: !!id,
   });
+
+  useEffect(() => {
+    if (!id) return;
+
+    const ws = new WebSocket(`ws://${window.location.host}`);
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "log" && data.botId === id) {
+        setLogs(prev => [...prev, data.log].slice(-100));
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [id]);
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -112,6 +138,30 @@ export default function BotDetail() {
         return;
       }
       toast({ title: "Failed to restart bot", variant: "destructive" });
+    },
+  });
+
+  const killMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/bots/${id}/stop`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bots", id] });
+      toast({ title: "Bot killed" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Failed to kill bot", variant: "destructive" });
     },
   });
 
@@ -188,11 +238,10 @@ export default function BotDetail() {
   });
 
   const status = (bot?.runtimeStatus || bot?.status || "offline") as BotStatus;
-  const isRunning = status === "online" || status === "starting";
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b sticky top-0 bg-background z-50">
+    <div className="min-h-screen bg-background dark:bg-background">
+      <header className="border-b sticky top-0 bg-background dark:bg-background z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -204,67 +253,72 @@ export default function BotDetail() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-semibold">{bot?.name}</h1>
+              <h1 className="text-xl font-semibold text-foreground dark:text-foreground">{bot?.name}</h1>
               <StatusIndicator status={status} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {isRunning ? (
-              <>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => stopMutation.mutate()}
-                  disabled={stopMutation.isPending || status === "starting"}
-                  data-testid="button-stop"
-                >
-                  <Square className="w-4 h-4" />
-                  Stop
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => restartMutation.mutate()}
-                  disabled={restartMutation.isPending || status === "starting"}
-                  data-testid="button-restart"
-                >
-                  <RotateCw className="w-4 h-4" />
-                  Restart
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                onClick={() => startMutation.mutate()}
-                disabled={startMutation.isPending}
-                data-testid="button-start"
-              >
-                <Play className="w-4 h-4" />
-                Start
-              </Button>
-            )}
-            <ThemeToggle />
-          </div>
+          <ThemeToggle />
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-        <div className="space-y-8">
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Description</h2>
-            <p className="text-muted-foreground">
-              {bot?.description || "No description provided."}
-            </p>
-          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex mb-8">
+            <TabsTrigger value="console" data-testid="tab-console">Console</TabsTrigger>
+            <TabsTrigger value="files" data-testid="tab-files">Files</TabsTrigger>
+            <TabsTrigger value="github" data-testid="tab-github">GitHub</TabsTrigger>
+            <TabsTrigger value="packages" data-testid="tab-packages">Packages</TabsTrigger>
+            <TabsTrigger value="env" data-testid="tab-env">Env Vars</TabsTrigger>
+            <TabsTrigger value="config" data-testid="tab-config">Config</TabsTrigger>
+            <TabsTrigger value="metrics" data-testid="tab-metrics">Metrics</TabsTrigger>
+          </TabsList>
 
-          <FileManager
-            botId={id!}
-            files={files}
-            onCreateFile={(file) => createFileMutation.mutate(file)}
-            onUpdateFile={(fileId, content) => updateFileMutation.mutate({ fileId, content })}
-            onDeleteFile={(fileId) => deleteFileMutation.mutate(fileId)}
-          />
-        </div>
+          <TabsContent value="console" data-testid="content-console">
+            <Console
+              botId={id!}
+              botName={bot?.name || "Bot"}
+              status={status}
+              logs={logs}
+              onStart={() => startMutation.mutate()}
+              onStop={() => stopMutation.mutate()}
+              onRestart={() => restartMutation.mutate()}
+              onKill={() => killMutation.mutate()}
+              isStarting={startMutation.isPending}
+              isStopping={stopMutation.isPending}
+              isRestarting={restartMutation.isPending}
+            />
+          </TabsContent>
+
+          <TabsContent value="files" data-testid="content-files">
+            <EnhancedFileManager
+              botId={id!}
+              files={files}
+              onCreateFile={(file) => createFileMutation.mutate(file)}
+              onUpdateFile={(fileId, content) => updateFileMutation.mutate({ fileId, content })}
+              onDeleteFile={(fileId) => deleteFileMutation.mutate(fileId)}
+            />
+          </TabsContent>
+
+          <TabsContent value="github" data-testid="content-github">
+            <GitHubIntegration botId={id!} />
+          </TabsContent>
+
+          <TabsContent value="packages" data-testid="content-packages">
+            <EnhancedPackageManager botId={id!} />
+          </TabsContent>
+
+          <TabsContent value="env" data-testid="content-env">
+            <EnvVarsManager botId={id!} />
+          </TabsContent>
+
+          <TabsContent value="config" data-testid="content-config">
+            <RuntimeConfig botId={id!} />
+          </TabsContent>
+
+          <TabsContent value="metrics" data-testid="content-metrics">
+            <ResourceMetrics botId={id!} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
