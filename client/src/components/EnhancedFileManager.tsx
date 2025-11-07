@@ -56,6 +56,8 @@ export function EnhancedFileManager({
     content: "",
   });
   const [newFolderName, setNewFolderName] = useState("");
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const fileInputRef = useState<HTMLInputElement | null>(null)[0];
 
   const handleCreateFile = () => {
     const size = new Blob([newFile.content]).size;
@@ -72,6 +74,48 @@ export function EnhancedFileManager({
       onCreateFolder(`${currentPath}${newFolderName}`);
       setNewFolderName("");
       setCreateFolderDialogOpen(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+
+      reader.onload = async (e) => {
+        let content = e.target?.result as string;
+        const size = file.size;
+        
+        // For binary files, content is already base64 if we use readAsDataURL
+        // For text files, it's the raw text
+        const isBinary = !file.type.startsWith('text/') && 
+                        !file.name.match(/\.(js|ts|jsx|tsx|json|md|txt|html|css|py|java|cpp|c|h)$/i);
+        
+        onCreateFile({
+          filename: file.name,
+          path: currentPath,
+          content: content,
+          size: `${(size / 1024).toFixed(2)} KB`,
+        });
+      };
+
+      // Read as text for text files, as data URL for binary files
+      const isBinary = !file.type.startsWith('text/') && 
+                      !file.name.match(/\.(js|ts|jsx|tsx|json|md|txt|html|css|py|java|cpp|c|h)$/i);
+      
+      if (isBinary) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+    }
+
+    setUploadDialogOpen(false);
+    if (event.target) {
+      event.target.value = '';
     }
   };
 
@@ -177,10 +221,47 @@ export function EnhancedFileManager({
             </DialogContent>
           </Dialog>
 
-          <Button variant="outline" className="w-full" data-testid="button-upload-files">
-            <Upload className="w-4 h-4 mr-2" />
-            Upload Files
-          </Button>
+          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full" data-testid="button-upload-files">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Files
+              </Button>
+            </DialogTrigger>
+            <DialogContent data-testid="dialog-upload-files">
+              <DialogHeader>
+                <DialogTitle>Upload Files</DialogTitle>
+                <DialogDescription>
+                  Select one or more files to upload to {currentPath}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="file-upload">Choose Files</Label>
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    data-testid="input-file-upload"
+                    className="cursor-pointer"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  You can select multiple files to upload at once.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setUploadDialogOpen(false)}
+                  data-testid="button-cancel-upload"
+                >
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={uploadFolderDialogOpen} onOpenChange={setUploadFolderDialogOpen}>
             <DialogTrigger asChild>
