@@ -15,7 +15,12 @@ import {
 } from "@shared/schema";
 import multer from "multer";
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -217,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bots/:botId/files", isAuthenticated, async (req: any, res) => {
+  app.post("/api/bots/:botId/files", isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
       const { botId } = req.params;
       const bot = await storage.getBotById(botId);
@@ -226,7 +231,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Bot not found" });
       }
       
-      const fileData = insertBotFileSchema.parse({ ...req.body, botId });
+      let content: string;
+      let filename: string;
+      let path: string;
+      let size: string;
+      
+      // Handle multipart file upload
+      if (req.file) {
+        const buffer = req.file.buffer;
+        filename = req.body.filename || req.file.originalname;
+        path = req.body.path || "/home/container/";
+        
+        // Comprehensive text file detection
+        const textExtensions = /\.(js|ts|jsx|tsx|json|md|txt|html|css|py|java|cpp|c|h|sh|yml|yaml|xml|ini|conf|cfg|env|gitignore|dockerfile|makefile|toml|rs|go|rb|php|sql|graphql|vue|svelte|bat|ps1)$/i;
+        const hasTextExtension = textExtensions.test(filename);
+        const hasTextMime = req.file.mimetype.startsWith('text/') || 
+                           req.file.mimetype.includes('json') || 
+                           req.file.mimetype.includes('xml') ||
+                           req.file.mimetype.includes('yaml');
+        
+        // Try to detect if content is text by checking if it's valid UTF-8
+        let isTextContent = false;
+        try {
+          const decoded = buffer.toString('utf-8');
+          // Check if decoded string contains only printable characters and common whitespace
+          isTextContent = /^[\x09\x0A\x0D\x20-\x7E\x80-\xFF]*$/.test(decoded.substring(0, Math.min(1024, decoded.length)));
+        } catch (e) {
+          isTextContent = false;
+        }
+        
+        const isBinary = !hasTextExtension && !hasTextMime && !isTextContent;
+        
+        if (isBinary) {
+          // Store binary files as base64 data URL
+          content = `data:${req.file.mimetype || 'application/octet-stream'};base64,${buffer.toString('base64')}`;
+        } else {
+          // Store text files as plain text
+          content = buffer.toString('utf-8');
+        }
+        
+        size = `${(buffer.length / 1024).toFixed(2)} KB`;
+      }
+      // Fallback to JSON format for backward compatibility
+      else {
+        const bodyData = req.body;
+        filename = bodyData.filename;
+        path = bodyData.path;
+        content = bodyData.content;
+        size = bodyData.size;
+      }
+      
+      const fileData = insertBotFileSchema.parse({ 
+        botId,
+        filename,
+        path,
+        content,
+        size
+      });
+      
       const file = await storage.createFile(fileData);
       
       res.json(file);

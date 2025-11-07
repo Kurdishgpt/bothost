@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +60,7 @@ export function EnhancedFileManager({
   const [newFolderName, setNewFolderName] = useState("");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const fileInputRef = useState<HTMLInputElement | null>(null)[0];
+  const { toast } = useToast();
 
   const handleCreateFile = () => {
     const size = new Blob([newFile.content]).size;
@@ -81,35 +84,62 @@ export function EnhancedFileManager({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
+    let successCount = 0;
+    let failCount = 0;
 
-      reader.onload = async (e) => {
-        let content = e.target?.result as string;
-        const size = file.size;
-        
-        // For binary files, content is already base64 if we use readAsDataURL
-        // For text files, it's the raw text
-        const isBinary = !file.type.startsWith('text/') && 
-                        !file.name.match(/\.(js|ts|jsx|tsx|json|md|txt|html|css|py|java|cpp|c|h)$/i);
-        
-        onCreateFile({
-          filename: file.name,
-          path: currentPath,
-          content: content,
-          size: `${(size / 1024).toFixed(2)} KB`,
+    const uploadPromises = Array.from(files).map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('filename', file.name);
+      formData.append('path', currentPath);
+
+      try {
+        const response = await fetch(`/api/bots/${botId}/files`, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
         });
-      };
 
-      // Read as text for text files, as data URL for binary files
-      const isBinary = !file.type.startsWith('text/') && 
-                      !file.name.match(/\.(js|ts|jsx|tsx|json|md|txt|html|css|py|java|cpp|c|h)$/i);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Upload failed');
+        }
+
+        successCount++;
+        return await response.json();
+      } catch (error: any) {
+        failCount++;
+        console.error(`Error uploading file ${file.name}:`, error);
+        throw error;
+      }
+    });
+
+    try {
+      await Promise.all(uploadPromises);
       
-      if (isBinary) {
-        reader.readAsDataURL(file);
+      // Invalidate React Query cache to refresh file list
+      queryClient.invalidateQueries({ queryKey: ["/api/bots", botId, "files"] });
+      
+      toast({
+        title: "Upload successful",
+        description: `${successCount} file(s) uploaded successfully`,
+      });
+    } catch (error) {
+      // Invalidate cache even on partial success
+      queryClient.invalidateQueries({ queryKey: ["/api/bots", botId, "files"] });
+      
+      if (successCount > 0 && failCount > 0) {
+        toast({
+          title: "Partial upload",
+          description: `${successCount} succeeded, ${failCount} failed`,
+          variant: "destructive",
+        });
       } else {
-        reader.readAsText(file);
+        toast({
+          title: "Upload failed",
+          description: `${failCount} file(s) failed to upload. Files over 10MB are not allowed.`,
+          variant: "destructive",
+        });
       }
     }
 
