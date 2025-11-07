@@ -13,6 +13,7 @@ import { GitHubIntegration } from "@/components/GitHubIntegration";
 import { EnhancedPackageManager } from "@/components/EnhancedPackageManager";
 import { EnvVarsManager } from "@/components/EnvVarsManager";
 import { RuntimeConfig } from "@/components/RuntimeConfig";
+import { BotSettings } from "@/components/BotSettings";
 import { ResourceMetrics } from "@/components/ResourceMetrics";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { StatusIndicator } from "@/components/StatusIndicator";
@@ -321,7 +322,10 @@ export default function BotDetail() {
           </TabsContent>
 
           <TabsContent value="config" data-testid="content-config">
-            <RuntimeConfig botId={id!} />
+            <div className="space-y-6">
+              <BotSettings botId={id!} />
+              <RuntimeConfig botId={id!} />
+            </div>
           </TabsContent>
 
           <TabsContent value="metrics" data-testid="content-metrics">

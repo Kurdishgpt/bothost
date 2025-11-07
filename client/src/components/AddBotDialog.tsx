@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Eye, EyeOff } from "lucide-react";
 
 interface AddBotDialogProps {
-  onAddBot?: (bot: { name: string; token: string; description: string }) => void;
+  onAddBot?: (bot: { name: string; token: string; description: string; startupCommand?: string }) => void;
 }
 
 export function AddBotDialog({ onAddBot }: AddBotDialogProps) {
@@ -25,12 +25,13 @@ export function AddBotDialog({ onAddBot }: AddBotDialogProps) {
     name: "",
     token: "",
     description: "",
+    startupCommand: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAddBot?.(formData);
-    setFormData({ name: "", token: "", description: "" });
+    setFormData({ name: "", token: "", description: "", startupCommand: "" });
     setOpen(false);
     setShowToken(false);
   };
@@ -113,6 +114,19 @@ export function AddBotDialog({ onAddBot }: AddBotDialogProps) {
                 rows={3}
                 data-testid="input-bot-description"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bot-startup-command">Startup Command (Optional)</Label>
+              <Input
+                id="bot-startup-command"
+                placeholder="e.g., --debug --shard-count 2"
+                value={formData.startupCommand}
+                onChange={(e) => handleChange("startupCommand", e.target.value)}
+                data-testid="input-bot-startup-command"
+              />
+              <p className="text-xs text-muted-foreground">
+                Custom arguments or flags to pass when starting your bot
+              </p>
             </div>
           </div>
           <DialogFooter>

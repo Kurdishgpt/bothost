@@ -71,7 +71,7 @@ Preferred communication style: Simple, everyday language.
 **Schema Design**
 - `users` table: User profiles from Replit Auth (id, email, firstName, lastName, profileImageUrl)
 - `sessions` table: Express session storage (required for authentication)
-- `bots` table: Discord bot configurations (id, userId, name, token, description, status, entryPoint, createdAt, updatedAt)
+- `bots` table: Discord bot configurations (id, userId, name, token, description, status, entryPoint, startupCommand, createdAt, updatedAt)
 - `bot_files` table: Bot source code files (id, botId, filename, path, content, size)
 - `bot_env_vars` table: Environment variables per bot (id, botId, key, value - encrypted)
 - `bot_runtime_configs` table: Resource limits (cpuLimit, memoryLimit, diskLimit, alwaysOn)
@@ -115,3 +115,12 @@ Preferred communication style: Simple, everyday language.
 - `ISSUER_URL`: Replit OIDC issuer URL (default: https://replit.com/oidc)
 - `REPL_ID`: Replit application identifier
 - `NODE_ENV`: Environment mode (development/production)
+
+## Recent Changes
+
+### November 7, 2025 - Startup Command Feature
+- Added `startupCommand` field to bots table to allow users to configure custom startup parameters/arguments
+- Created new `BotSettings` component for managing bot entry point and startup command
+- Updated `AddBotDialog` to include startup command input field
+- Updated `BotDetail` page Config tab to include BotSettings component alongside RuntimeConfig
+- Database schema successfully migrated using drizzle-kit push

@@ -48,6 +48,7 @@ export const bots = pgTable("bots", {
   description: text("description"),
   status: varchar("status", { length: 50 }).notNull().default("offline"), // online, offline, starting, error
   entryPoint: varchar("entry_point", { length: 500 }).default("index.js"), // Main file to run
+  startupCommand: text("startup_command"), // Custom startup command/arguments
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
