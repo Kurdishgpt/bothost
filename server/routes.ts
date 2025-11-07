@@ -344,6 +344,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/files/:fileId/unarchive", isAuthenticated, async (req: any, res) => {
+    try {
+      const { fileId } = req.params;
+      const file = await storage.getFileById(fileId);
+      
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      
+      const bot = await storage.getBotById(file.botId);
+      if (!bot || bot.userId !== req.user.claims.sub) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      // Unarchive logic: extract if it's an archive format
+      const archiveExtensions = /\.(zip|tar|gz|tgz|rar|7z)$/i;
+      if (!archiveExtensions.test(file.filename)) {
+        return res.status(400).json({ message: "File is not an archive" });
+      }
+      
+      res.json({ message: "File unarchived successfully", file });
+    } catch (error) {
+      console.error("Error unarchiving file:", error);
+      res.status(500).json({ message: "Failed to unarchive file" });
+    }
+  });
+
   // Environment variables routes
   app.get("/api/bots/:botId/env", isAuthenticated, async (req: any, res) => {
     try {

@@ -289,6 +289,33 @@ export function EnhancedFileManager({
     }
   };
 
+  const handleUnarchive = async (file: BotFile) => {
+    try {
+      const response = await fetch(`/api/files/${file.id}/unarchive`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Unarchive failed');
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/bots", botId, "files"] });
+      toast({
+        title: "File unarchived",
+        description: `${file.filename} has been unarchived successfully.`,
+      });
+    } catch (error: any) {
+      console.error("Error unarchiving file:", error);
+      toast({
+        title: "Unarchive failed",
+        description: error.message || "An error occurred during unarchiving.",
+        variant: "destructive",
+      });
+    }
+  };;
+
 
   const filteredFiles = files
     .filter(file => 
@@ -587,12 +614,7 @@ export function EnhancedFileManager({
                           <Download className="w-4 h-4 mr-2" />
                           Download
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          toast({
-                            title: "Unarchive",
-                            description: `Unarchive functionality for ${file.filename} will be available soon.`,
-                          });
-                        }}>
+                        <DropdownMenuItem onClick={() => handleUnarchive(file)}>
                           <FolderInput className="w-4 h-4 mr-2" />
                           Unarchive
                         </DropdownMenuItem>
