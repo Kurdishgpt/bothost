@@ -414,6 +414,13 @@ export function EnhancedFileManager({
             <Upload className="w-4 h-4 mr-2" />
             Upload Files
           </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileUpload}
+          />
           <Button
             variant="outline"
             className="w-full relative"
@@ -426,6 +433,15 @@ export function EnhancedFileManager({
               EXPERIMENTAL
             </span>
           </Button>
+          <input
+            ref={folderInputRef}
+            type="file"
+            webkitdirectory=""
+            directory=""
+            multiple
+            className="hidden"
+            onChange={handleUploadFolder}
+          />
 
 
           <Dialog open={uploadFolderDialogOpen} onOpenChange={setUploadFolderDialogOpen}>
