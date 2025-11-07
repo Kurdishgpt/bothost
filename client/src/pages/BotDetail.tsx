@@ -55,13 +55,22 @@ export default function BotDetail() {
   useEffect(() => {
     if (!id) return;
 
-    const ws = new WebSocket(`ws://${window.location.host}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+    };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "log" && data.botId === id) {
-        setLogs(prev => [...prev, data.log].slice(-100));
+      if (data.type === "log" && data.data?.botId === id && data.data?.log) {
+        setLogs(prev => [...prev, data.data.log].slice(-100));
       }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
     };
 
     return () => {

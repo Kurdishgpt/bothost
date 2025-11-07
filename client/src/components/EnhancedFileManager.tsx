@@ -44,6 +44,7 @@ export function EnhancedFileManager({
   const [editContent, setEditContent] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
+  const [uploadFolderDialogOpen, setUploadFolderDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [searchTerm, setSearchTerm] = useState("");
@@ -181,7 +182,7 @@ export function EnhancedFileManager({
             Upload Files
           </Button>
 
-          <Dialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen}>
+          <Dialog open={uploadFolderDialogOpen} onOpenChange={setUploadFolderDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="w-full" data-testid="button-upload-folder">
                 <UploadCloud className="w-4 h-4 mr-2" />
@@ -191,7 +192,7 @@ export function EnhancedFileManager({
                 </span>
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent data-testid="dialog-upload-folder">
               <DialogHeader>
                 <DialogTitle>Upload Folder (Experimental)</DialogTitle>
                 <DialogDescription>
@@ -201,6 +202,15 @@ export function EnhancedFileManager({
               <p className="text-sm text-muted-foreground">
                 Folder upload functionality coming soon.
               </p>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setUploadFolderDialogOpen(false)}
+                  data-testid="button-close-upload-folder"
+                >
+                  Close
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 
