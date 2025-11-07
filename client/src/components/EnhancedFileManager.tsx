@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,8 +22,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { File, Plus, Edit, Trash2, Grid3x3, List, FolderPlus, Upload, UploadCloud, Search } from "lucide-react";
+import {
+  File,
+  Plus,
+  Edit,
+  Trash2,
+  Grid3x3,
+  List,
+  FolderPlus,
+  Upload,
+  UploadCloud,
+  Search,
+  MoreVertical,
+  Copy,
+  Download,
+  FolderInput,
+} from "lucide-react";
 import type { BotFile } from "@shared/schema";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface EnhancedFileManagerProps {
   botId: string;
@@ -32,6 +53,11 @@ interface EnhancedFileManagerProps {
   onUpdateFile: (fileId: string, content: string) => void;
   onDeleteFile: (fileId: string) => void;
   onCreateFolder?: (path: string) => void;
+  onRenameFile?: (fileId: string, newFilename: string) => void;
+  onMoveFile?: (fileId: string, newPath: string) => void;
+  onCopyFile?: (fileId: string) => void;
+  onDownloadFile?: (fileId: string) => void;
+  onUploadFolder?: (folderData: FormData) => void;
 }
 
 export function EnhancedFileManager({
@@ -41,6 +67,11 @@ export function EnhancedFileManager({
   onUpdateFile,
   onDeleteFile,
   onCreateFolder,
+  onRenameFile,
+  onMoveFile,
+  onCopyFile,
+  onDownloadFile,
+  onUploadFolder,
 }: EnhancedFileManagerProps) {
   const [selectedFile, setSelectedFile] = useState<BotFile | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -59,7 +90,12 @@ export function EnhancedFileManager({
   });
   const [newFolderName, setNewFolderName] = useState("");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const fileInputRef = useState<HTMLInputElement | null>(null)[0];
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [newFilename, setNewFilename] = useState("");
+  const [newPath, setNewPath] = useState("");
   const { toast } = useToast();
 
   const handleCreateFile = () => {
@@ -116,10 +152,10 @@ export function EnhancedFileManager({
 
     try {
       await Promise.all(uploadPromises);
-      
+
       // Invalidate React Query cache to refresh file list
       queryClient.invalidateQueries({ queryKey: ["/api/bots", botId, "files"] });
-      
+
       toast({
         title: "Upload successful",
         description: `${successCount} file(s) uploaded successfully`,
@@ -127,7 +163,7 @@ export function EnhancedFileManager({
     } catch (error) {
       // Invalidate cache even on partial success
       queryClient.invalidateQueries({ queryKey: ["/api/bots", botId, "files"] });
-      
+
       if (successCount > 0 && failCount > 0) {
         toast({
           title: "Partial upload",
@@ -149,6 +185,50 @@ export function EnhancedFileManager({
     }
   };
 
+  const handleUploadFolder = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    // Append all files to FormData
+    Array.from(files).forEach(file => {
+      formData.append('files', file);
+    });
+    formData.append('path', currentPath); // Assuming you want to upload to the current path
+
+    try {
+      const response = await fetch(`/api/bots/${botId}/folders`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Folder upload failed');
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/bots", botId, "files"] });
+      toast({
+        title: "Folder upload successful",
+        description: "Folder uploaded successfully.",
+      });
+    } catch (error: any) {
+      console.error("Error uploading folder:", error);
+      toast({
+        title: "Folder upload failed",
+        description: error.message || "An error occurred during folder upload.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadFolderDialogOpen(false);
+      if (event.target) {
+        event.target.value = '';
+      }
+    }
+  };
+
+
   const handleEditFile = (file: BotFile) => {
     setSelectedFile(file);
     setEditContent(file.content);
@@ -162,6 +242,53 @@ export function EnhancedFileManager({
       setSelectedFile(null);
     }
   };
+
+  const handleCopy = (file: BotFile) => {
+    if (onCopyFile) {
+      onCopyFile(file.id);
+      toast({
+        title: "File copied",
+        description: `File ${file.filename} has been copied.`,
+      });
+    }
+  };
+
+  const handleDownload = (file: BotFile) => {
+    if (onDownloadFile) {
+      onDownloadFile(file.id);
+      toast({
+        title: "Download initiated",
+        description: `Download for ${file.filename} has started.`,
+      });
+    }
+  };
+
+  const handleRename = () => {
+    if (selectedFile && onRenameFile && newFilename) {
+      onRenameFile(selectedFile.id, newFilename);
+      setRenameDialogOpen(false);
+      setSelectedFile(null);
+      setNewFilename("");
+      toast({
+        title: "File renamed",
+        description: `File renamed to ${newFilename}.`,
+      });
+    }
+  };
+
+  const handleMove = () => {
+    if (selectedFile && onMoveFile && newPath) {
+      onMoveFile(selectedFile.id, newPath);
+      setMoveDialogOpen(false);
+      setSelectedFile(null);
+      setNewPath("");
+      toast({
+        title: "File moved",
+        description: `File moved to ${newPath}.`,
+      });
+    }
+  };
+
 
   const filteredFiles = files
     .filter(file => 
@@ -251,51 +378,32 @@ export function EnhancedFileManager({
             </DialogContent>
           </Dialog>
 
-          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full" data-testid="button-upload-files">
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Files
-              </Button>
-            </DialogTrigger>
-            <DialogContent data-testid="dialog-upload-files">
-              <DialogHeader>
-                <DialogTitle>Upload Files</DialogTitle>
-                <DialogDescription>
-                  Select one or more files to upload to {currentPath}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="file-upload">Choose Files</Label>
-                  <Input
-                    id="file-upload"
-                    type="file"
-                    multiple
-                    onChange={handleFileUpload}
-                    data-testid="input-file-upload"
-                    className="cursor-pointer"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  You can select multiple files to upload at once.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setUploadDialogOpen(false)}
-                  data-testid="button-cancel-upload"
-                >
-                  Cancel
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => fileInputRef.current?.click()}
+            data-testid="button-upload-file"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Files
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full relative"
+            onClick={() => folderInputRef.current?.click()}
+            data-testid="button-upload-folder"
+          >
+            <FolderInput className="w-4 h-4 mr-2" />
+            Upload Folder
+            <span className="ml-2 text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded">
+              EXPERIMENTAL
+            </span>
+          </Button>
+
 
           <Dialog open={uploadFolderDialogOpen} onOpenChange={setUploadFolderDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="w-full" data-testid="button-upload-folder">
+              <Button variant="outline" className="w-full" data-testid="button-upload-folder-dialog">
                 <UploadCloud className="w-4 h-4 mr-2" />
                 Upload Folder
                 <span className="ml-2 px-2 py-0.5 bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 text-xs rounded">
@@ -444,14 +552,50 @@ export function EnhancedFileManager({
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onDeleteFile(file.id)}
-                      data-testid={`button-delete-${file.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          data-testid={`button-file-menu-${file.id}`}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleCopy(file)}>
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setSelectedFile(file);
+                          setNewFilename(file.filename);
+                          setRenameDialogOpen(true);
+                        }}>
+                          <File className="w-4 h-4 mr-2" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setSelectedFile(file);
+                          setNewPath(file.path);
+                          setMoveDialogOpen(true);
+                        }}>
+                          <FolderInput className="w-4 h-4 mr-2" />
+                          Move
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownload(file)}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onDeleteFile?.(file.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               ))}
@@ -483,6 +627,65 @@ export function EnhancedFileManager({
             </Button>
             <Button onClick={handleSaveEdit} data-testid="button-save-edit">
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent data-testid="dialog-rename-file">
+          <DialogHeader>
+            <DialogTitle>Rename File</DialogTitle>
+            <DialogDescription>Enter a new name for the file.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rename-filename">New Filename</Label>
+              <Input
+                id="rename-filename"
+                value={newFilename}
+                onChange={(e) => setNewFilename(e.target.value)}
+                data-testid="input-rename-filename"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRename} data-testid="button-confirm-rename">
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Dialog */}
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <DialogContent data-testid="dialog-move-file">
+          <DialogHeader>
+            <DialogTitle>Move File</DialogTitle>
+            <DialogDescription>Enter a new path for the file.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="move-path">New Path</Label>
+              <Input
+                id="move-path"
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+                placeholder="/home/container/"
+                data-testid="input-move-path"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleMove} data-testid="button-confirm-move">
+              Move
             </Button>
           </DialogFooter>
         </DialogContent>

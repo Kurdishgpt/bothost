@@ -33,7 +33,7 @@ export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  
+
   // Bot operations
   getBotsByUserId(userId: string): Promise<Bot[]>;
   getBotById(botId: string): Promise<Bot | undefined>;
@@ -41,36 +41,36 @@ export interface IStorage {
   updateBotStatus(botId: string, status: string): Promise<void>;
   updateBot(botId: string, updates: Partial<InsertBot>): Promise<Bot>;
   deleteBot(botId: string): Promise<void>;
-  
+
   // File operations
   getFilesByBotId(botId: string): Promise<BotFile[]>;
   getFileById(fileId: string): Promise<BotFile | undefined>;
   createFile(file: InsertBotFile): Promise<BotFile>;
-  updateFile(fileId: string, content: string): Promise<BotFile>;
+  updateFile(fileId: string, content?: string, filename?: string, path?: string): Promise<BotFile>;
   deleteFile(fileId: string): Promise<void>;
   deleteFilesByBotId(botId: string): Promise<void>;
-  
+
   // Environment variables operations
   getEnvVarsByBotId(botId: string): Promise<BotEnvVar[]>;
   getEnvVarById(id: string): Promise<BotEnvVar | undefined>;
   createEnvVar(envVar: InsertBotEnvVar & { value: string }): Promise<BotEnvVar>;
   updateEnvVar(id: string, value: string): Promise<BotEnvVar>;
   deleteEnvVar(id: string): Promise<void>;
-  
+
   // Runtime config operations
   getRuntimeConfig(botId: string): Promise<BotRuntimeConfig | undefined>;
   upsertRuntimeConfig(config: InsertBotRuntimeConfig): Promise<BotRuntimeConfig>;
-  
+
   // Runtime metrics operations
   createMetric(metric: InsertBotRuntimeMetric): Promise<BotRuntimeMetric>;
   getLatestMetrics(botId: string, limit?: number): Promise<BotRuntimeMetric[]>;
-  
+
   // Assets operations
   getAssetsByBotId(botId: string): Promise<BotAsset[]>;
   getAssetById(id: string): Promise<BotAsset | undefined>;
   createAsset(asset: InsertBotAsset): Promise<BotAsset>;
   deleteAsset(id: string): Promise<void>;
-  
+
   // Packages operations
   getPackagesByBotId(botId: string): Promise<BotPackage[]>;
   getPackageById(id: string): Promise<BotPackage | undefined>;
@@ -156,11 +156,16 @@ export class DatabaseStorage implements IStorage {
     return file;
   }
 
-  async updateFile(fileId: string, content: string): Promise<BotFile> {
+  async updateFile(id: string, content?: string, filename?: string, path?: string): Promise<BotFile> {
+    const updateData: any = { updatedAt: new Date() };
+    if (content !== undefined) updateData.content = content;
+    if (filename !== undefined) updateData.filename = filename;
+    if (path !== undefined) updateData.path = path;
+
     const [file] = await db
       .update(botFiles)
-      .set({ content, updatedAt: new Date() })
-      .where(eq(botFiles.id, fileId))
+      .set(updateData)
+      .where(eq(botFiles.id, id))
       .returning();
     return file;
   }
@@ -292,11 +297,11 @@ export class DatabaseStorage implements IStorage {
     const key = this.getEncryptionKey();
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv(algorithm, key, iv);
-    
+
     let encrypted = cipher.update(value, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     const authTag = cipher.getAuthTag();
-    
+
     return JSON.stringify({
       iv: iv.toString('hex'),
       encrypted,
@@ -308,17 +313,17 @@ export class DatabaseStorage implements IStorage {
     const algorithm = 'aes-256-gcm';
     const key = this.getEncryptionKey();
     const data = JSON.parse(encryptedData);
-    
+
     const decipher = crypto.createDecipheriv(
       algorithm,
       key,
       Buffer.from(data.iv, 'hex')
     );
     decipher.setAuthTag(Buffer.from(data.authTag, 'hex'));
-    
+
     let decrypted = decipher.update(data.encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
   }
 

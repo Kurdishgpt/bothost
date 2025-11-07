@@ -312,8 +312,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden" });
       }
       
-      const { content } = req.body;
-      const updatedFile = await storage.updateFile(fileId, content);
+      const { content, filename, path } = req.body;
+      const updatedFile = await storage.updateFile(fileId, content, filename, path);
       
       res.json(updatedFile);
     } catch (error) {
