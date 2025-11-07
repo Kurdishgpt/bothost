@@ -118,6 +118,39 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 7, 2025 - ZIP Extraction, Admin Login & File Manager Enhancements
+
+**ZIP File Extraction**
+- Installed `adm-zip` package for archive extraction functionality
+- Implemented `/api/files/:fileId/unarchive` endpoint for ZIP file extraction
+- Properly preserves directory structure from ZIP archives
+- Extracts files to nested folders matching original ZIP structure
+- Supports both text and binary files with proper MIME type detection
+- Original ZIP archive remains intact after extraction
+- Unarchive button already present in EnhancedFileManager dropdown menu
+
+**Admin Login System**
+- Created `/api/auth/local-login` endpoint for simple credential-based authentication
+- Default credentials: username `admin1234`, password `admin1234`
+- Uses environment variables (`ADMIN_USERNAME`, `ADMIN_PASSWORD`) with fallback to defaults for development
+- Creates session compatible with existing `isAuthenticated` middleware
+- Admin user stored in database with profile (admin@bothost.local)
+- Session expires after 7 days (same as Replit Auth)
+
+**Landing Page Login Form**
+- Added login dialog to Landing page with username/password fields
+- Supports both admin login and Replit Auth
+- Includes "Log in with Replit" fallback option
+- Form validates credentials and provides user feedback
+- Redirects to dashboard on successful login
+- Enter key support for quick login
+
+**Security Notes**
+- Admin credentials should be changed via environment variables in production
+- Default credentials are for development/demo purposes only
+- Session handling uses secure cookies (httpOnly, secure flags)
+- Environment variable configuration: `ADMIN_USERNAME` and `ADMIN_PASSWORD`
+
 ### November 7, 2025 - Startup Command Feature
 - Added `startupCommand` field to bots table to allow users to configure custom startup parameters/arguments
 - Created new `BotSettings` component for managing bot entry point and startup command
