@@ -8,10 +8,10 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { BotCard, type Bot } from "@/components/BotCard";
 import { StatsCard } from "@/components/StatsCard";
-import { AddBotDialog } from "@/components/AddBotDialog";
+import { AddServerDialog } from "@/components/AddServerDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Bot as BotIcon, Activity, Clock, Zap, LogOut } from "lucide-react";
+import { Server as ServerIcon, Activity, Clock, Zap, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {  Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -42,18 +42,18 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  const { data: bots = [] } = useQuery<Bot[]>({
-    queryKey: ["/api/bots"],
+  const { data: servers = [] } = useQuery<Bot[]>({
+    queryKey: ["/api/servers"],
     enabled: isAuthenticated,
   });
 
-  const addBotMutation = useMutation({
-    mutationFn: async (newBot: { name: string; token: string; description: string }) => {
-      await apiRequest("POST", "/api/bots", newBot);
+  const addServerMutation = useMutation({
+    mutationFn: async (newServer: any) => {
+      await apiRequest("POST", "/api/servers", newServer);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
-      toast({ title: "Bot added successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/servers"] });
+      toast({ title: "Server created successfully" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -67,17 +67,17 @@ export default function Dashboard() {
         }, 500);
         return;
       }
-      toast({ title: "Failed to add bot", variant: "destructive" });
+      toast({ title: "Failed to create server", variant: "destructive" });
     },
   });
 
   const startMutation = useMutation({
-    mutationFn: async (botId: string) => {
-      await apiRequest("POST", `/api/bots/${botId}/start`);
+    mutationFn: async (serverId: string) => {
+      await apiRequest("POST", `/api/servers/${serverId}/start`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
-      toast({ title: "Bot is starting..." });
+      queryClient.invalidateQueries({ queryKey: ["/api/servers"] });
+      toast({ title: "Server is starting..." });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -91,17 +91,17 @@ export default function Dashboard() {
         }, 500);
         return;
       }
-      toast({ title: "Failed to start bot", variant: "destructive" });
+      toast({ title: "Failed to start server", variant: "destructive" });
     },
   });
 
   const stopMutation = useMutation({
-    mutationFn: async (botId: string) => {
-      await apiRequest("POST", `/api/bots/${botId}/stop`);
+    mutationFn: async (serverId: string) => {
+      await apiRequest("POST", `/api/servers/${serverId}/stop`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
-      toast({ title: "Bot stopped" });
+      queryClient.invalidateQueries({ queryKey: ["/api/servers"] });
+      toast({ title: "Server stopped" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -115,17 +115,17 @@ export default function Dashboard() {
         }, 500);
         return;
       }
-      toast({ title: "Failed to stop bot", variant: "destructive" });
+      toast({ title: "Failed to stop server", variant: "destructive" });
     },
   });
 
   const restartMutation = useMutation({
-    mutationFn: async (botId: string) => {
-      await apiRequest("POST", `/api/bots/${botId}/restart`);
+    mutationFn: async (serverId: string) => {
+      await apiRequest("POST", `/api/servers/${serverId}/restart`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
-      toast({ title: "Bot is restarting..." });
+      queryClient.invalidateQueries({ queryKey: ["/api/servers"] });
+      toast({ title: "Server is restarting..." });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -139,17 +139,17 @@ export default function Dashboard() {
         }, 500);
         return;
       }
-      toast({ title: "Failed to restart bot", variant: "destructive" });
+      toast({ title: "Failed to restart server", variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (botId: string) => {
-      await apiRequest("DELETE", `/api/bots/${botId}`);
+    mutationFn: async (serverId: string) => {
+      await apiRequest("DELETE", `/api/servers/${serverId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
-      toast({ title: "Bot deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/servers"] });
+      toast({ title: "Server deleted successfully" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -163,11 +163,11 @@ export default function Dashboard() {
         }, 500);
         return;
       }
-      toast({ title: "Failed to delete bot", variant: "destructive" });
+      toast({ title: "Failed to delete server", variant: "destructive" });
     },
   });
 
-  const activeBots = bots.filter((bot: any) => bot.runtimeStatus === "online" || bot.status === "online").length;
+  const activeServers = servers.filter((server: any) => server.runtimeStatus === "online" || server.status === "online").length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -175,12 +175,12 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-              <BotIcon className="w-5 h-5 text-primary-foreground" />
+              <ServerIcon className="w-5 h-5 text-primary-foreground" />
             </div>
-            <h1 className="text-xl font-semibold">BotHost</h1>
+            <h1 className="text-xl font-semibold">ServerHost</h1>
           </div>
           <div className="flex items-center gap-2">
-            <AddBotDialog onAddBot={(bot) => addBotMutation.mutate(bot)} />
+            <AddServerDialog onAddServer={(server) => addServerMutation.mutate(server)} />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -207,24 +207,24 @@ export default function Dashboard() {
           <div>
             <h2 className="text-2xl md:text-3xl font-semibold mb-2">Dashboard</h2>
             <p className="text-muted-foreground">
-              Monitor and manage your Discord bots in real-time
+              Monitor and manage your servers in real-time
             </p>
           </div>
 
-          {bots.length > 0 ? (
+          {servers.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatsCard
-                  title="Total Bots"
-                  value={bots.length}
-                  icon={BotIcon}
-                  description={`${activeBots} active`}
+                  title="Total Servers"
+                  value={servers.length}
+                  icon={ServerIcon}
+                  description={`${activeServers} active`}
                 />
                 <StatsCard
-                  title="Active Bots"
-                  value={activeBots}
+                  title="Active Servers"
+                  value={activeServers}
                   icon={Activity}
-                  description={`${bots.length - activeBots} offline`}
+                  description={`${servers.length - activeServers} offline`}
                 />
                 <StatsCard
                   title="Total Uptime"
@@ -241,24 +241,24 @@ export default function Dashboard() {
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-4">Your Bots</h3>
+                <h3 className="text-lg font-semibold mb-4">Your Servers</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {bots.map((bot: any) => (
+                  {servers.map((server: any) => (
                     <BotCard
-                      key={bot.id}
+                      key={server.id}
                       bot={{
-                        id: bot.id,
-                        name: bot.name,
-                        status: (bot.runtimeStatus || bot.status) as BotStatus,
-                        uptime: bot.uptime ? `${Math.floor(bot.uptime / 1000 / 60)}m` : "0m",
+                        id: server.id,
+                        name: server.name,
+                        status: (server.runtimeStatus || server.status) as BotStatus,
+                        uptime: server.uptime ? `${Math.floor(server.uptime / 1000 / 60)}m` : "0m",
                         memoryUsage: "-- MB",
-                        lastRestart: bot.updatedAt ? new Date(bot.updatedAt).toLocaleDateString() : "--",
+                        lastRestart: server.updatedAt ? new Date(server.updatedAt).toLocaleDateString() : "--",
                       }}
                       onStart={(id) => startMutation.mutate(id)}
                       onStop={(id) => stopMutation.mutate(id)}
                       onRestart={(id) => restartMutation.mutate(id)}
-                      onViewLogs={(id) => setLocation(`/bots/${id}`)}
-                      onSettings={(id) => setLocation(`/bots/${id}`)}
+                      onViewLogs={(id) => setLocation(`/servers/${id}`)}
+                      onSettings={(id) => setLocation(`/servers/${id}`)}
                       onDelete={(id) => deleteMutation.mutate(id)}
                     />
                   ))}

@@ -6,12 +6,12 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { botManager } from "./botManager";
 import { 
-  insertBotSchema, 
-  insertBotFileSchema,
-  insertBotEnvVarSchema,
-  insertBotRuntimeConfigSchema,
-  insertBotAssetSchema,
-  insertBotPackageSchema,
+  insertServerSchema, 
+  insertServerFileSchema,
+  insertServerEnvVarSchema,
+  insertServerRuntimeConfigSchema,
+  insertServerAssetSchema,
+  insertServerPackageSchema,
 } from "@shared/schema";
 import multer from "multer";
 import AdmZip from "adm-zip";

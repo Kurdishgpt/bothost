@@ -1,29 +1,29 @@
 // Database storage implementation - referenced from blueprint:javascript_database
 import {
   users,
-  bots,
-  botFiles,
-  botEnvVars,
-  botRuntimeConfigs,
-  botRuntimeMetrics,
-  botAssets,
-  botPackages,
+  servers,
+  serverFiles,
+  serverEnvVars,
+  serverRuntimeConfigs,
+  serverRuntimeMetrics,
+  serverAssets,
+  serverPackages,
   type User,
   type UpsertUser,
-  type Bot,
-  type InsertBot,
-  type BotFile,
-  type InsertBotFile,
-  type BotEnvVar,
-  type InsertBotEnvVar,
-  type BotRuntimeConfig,
-  type InsertBotRuntimeConfig,
-  type BotRuntimeMetric,
-  type InsertBotRuntimeMetric,
-  type BotAsset,
-  type InsertBotAsset,
-  type BotPackage,
-  type InsertBotPackage,
+  type Server,
+  type InsertServer,
+  type ServerFile,
+  type InsertServerFile,
+  type ServerEnvVar,
+  type InsertServerEnvVar,
+  type ServerRuntimeConfig,
+  type InsertServerRuntimeConfig,
+  type ServerRuntimeMetric,
+  type InsertServerRuntimeMetric,
+  type ServerAsset,
+  type InsertServerAsset,
+  type ServerPackage,
+  type InsertServerPackage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
@@ -34,47 +34,47 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 
-  // Bot operations
-  getBotsByUserId(userId: string): Promise<Bot[]>;
-  getBotById(botId: string): Promise<Bot | undefined>;
-  createBot(userId: string, bot: InsertBot): Promise<Bot>;
-  updateBotStatus(botId: string, status: string): Promise<void>;
-  updateBot(botId: string, updates: Partial<InsertBot>): Promise<Bot>;
-  deleteBot(botId: string): Promise<void>;
+  // Server operations
+  getServersByUserId(userId: string): Promise<Server[]>;
+  getServerById(serverId: string): Promise<Server | undefined>;
+  createServer(userId: string, server: InsertServer): Promise<Server>;
+  updateServerStatus(serverId: string, status: string): Promise<void>;
+  updateServer(serverId: string, updates: Partial<InsertServer>): Promise<Server>;
+  deleteServer(serverId: string): Promise<void>;
 
   // File operations
-  getFilesByBotId(botId: string): Promise<BotFile[]>;
-  getFileById(fileId: string): Promise<BotFile | undefined>;
-  createFile(file: InsertBotFile): Promise<BotFile>;
-  updateFile(fileId: string, content?: string, filename?: string, path?: string): Promise<BotFile>;
+  getFilesByServerId(serverId: string): Promise<ServerFile[]>;
+  getFileById(fileId: string): Promise<ServerFile | undefined>;
+  createFile(file: InsertServerFile): Promise<ServerFile>;
+  updateFile(fileId: string, content?: string, filename?: string, path?: string): Promise<ServerFile>;
   deleteFile(fileId: string): Promise<void>;
-  deleteFilesByBotId(botId: string): Promise<void>;
+  deleteFilesByServerId(serverId: string): Promise<void>;
 
   // Environment variables operations
-  getEnvVarsByBotId(botId: string): Promise<BotEnvVar[]>;
-  getEnvVarById(id: string): Promise<BotEnvVar | undefined>;
-  createEnvVar(envVar: InsertBotEnvVar & { value: string }): Promise<BotEnvVar>;
-  updateEnvVar(id: string, value: string): Promise<BotEnvVar>;
+  getEnvVarsByServerId(serverId: string): Promise<ServerEnvVar[]>;
+  getEnvVarById(id: string): Promise<ServerEnvVar | undefined>;
+  createEnvVar(envVar: InsertServerEnvVar & { value: string }): Promise<ServerEnvVar>;
+  updateEnvVar(id: string, value: string): Promise<ServerEnvVar>;
   deleteEnvVar(id: string): Promise<void>;
 
   // Runtime config operations
-  getRuntimeConfig(botId: string): Promise<BotRuntimeConfig | undefined>;
-  upsertRuntimeConfig(config: InsertBotRuntimeConfig): Promise<BotRuntimeConfig>;
+  getRuntimeConfig(serverId: string): Promise<ServerRuntimeConfig | undefined>;
+  upsertRuntimeConfig(config: InsertServerRuntimeConfig): Promise<ServerRuntimeConfig>;
 
   // Runtime metrics operations
-  createMetric(metric: InsertBotRuntimeMetric): Promise<BotRuntimeMetric>;
-  getLatestMetrics(botId: string, limit?: number): Promise<BotRuntimeMetric[]>;
+  createMetric(metric: InsertServerRuntimeMetric): Promise<ServerRuntimeMetric>;
+  getLatestMetrics(serverId: string, limit?: number): Promise<ServerRuntimeMetric[]>;
 
   // Assets operations
-  getAssetsByBotId(botId: string): Promise<BotAsset[]>;
-  getAssetById(id: string): Promise<BotAsset | undefined>;
-  createAsset(asset: InsertBotAsset): Promise<BotAsset>;
+  getAssetsByServerId(serverId: string): Promise<ServerAsset[]>;
+  getAssetById(id: string): Promise<ServerAsset | undefined>;
+  createAsset(asset: InsertServerAsset): Promise<ServerAsset>;
   deleteAsset(id: string): Promise<void>;
 
   // Packages operations
-  getPackagesByBotId(botId: string): Promise<BotPackage[]>;
-  getPackageById(id: string): Promise<BotPackage | undefined>;
-  createPackage(pkg: InsertBotPackage): Promise<BotPackage>;
+  getPackagesByServerId(serverId: string): Promise<ServerPackage[]>;
+  getPackageById(id: string): Promise<ServerPackage | undefined>;
+  createPackage(pkg: InsertServerPackage): Promise<ServerPackage>;
   deletePackage(id: string): Promise<void>;
 }
 
@@ -100,98 +100,98 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Bot operations
-  async getBotsByUserId(userId: string): Promise<Bot[]> {
-    return await db.select().from(bots).where(eq(bots.userId, userId));
+  // Server operations
+  async getServersByUserId(userId: string): Promise<Server[]> {
+    return await db.select().from(servers).where(eq(servers.userId, userId));
   }
 
-  async getBotById(botId: string): Promise<Bot | undefined> {
-    const [bot] = await db.select().from(bots).where(eq(bots.id, botId));
-    return bot;
+  async getServerById(serverId: string): Promise<Server | undefined> {
+    const [server] = await db.select().from(servers).where(eq(servers.id, serverId));
+    return server;
   }
 
-  async createBot(userId: string, botData: InsertBot): Promise<Bot> {
-    const [bot] = await db
-      .insert(bots)
+  async createServer(userId: string, serverData: InsertServer): Promise<Server> {
+    const [server] = await db
+      .insert(servers)
       .values({
-        ...botData,
+        ...serverData,
         userId,
       })
       .returning();
-    return bot;
+    return server;
   }
 
-  async updateBotStatus(botId: string, status: string): Promise<void> {
+  async updateServerStatus(serverId: string, status: string): Promise<void> {
     await db
-      .update(bots)
+      .update(servers)
       .set({ status, updatedAt: new Date() })
-      .where(eq(bots.id, botId));
+      .where(eq(servers.id, serverId));
   }
 
-  async updateBot(botId: string, updates: Partial<InsertBot>): Promise<Bot> {
-    const [bot] = await db
-      .update(bots)
+  async updateServer(serverId: string, updates: Partial<InsertServer>): Promise<Server> {
+    const [server] = await db
+      .update(servers)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(bots.id, botId))
+      .where(eq(servers.id, serverId))
       .returning();
-    return bot;
+    return server;
   }
 
-  async deleteBot(botId: string): Promise<void> {
-    await db.delete(bots).where(eq(bots.id, botId));
+  async deleteServer(serverId: string): Promise<void> {
+    await db.delete(servers).where(eq(servers.id, serverId));
   }
 
   // File operations
-  async getFilesByBotId(botId: string): Promise<BotFile[]> {
-    return await db.select().from(botFiles).where(eq(botFiles.botId, botId));
+  async getFilesByServerId(serverId: string): Promise<ServerFile[]> {
+    return await db.select().from(serverFiles).where(eq(serverFiles.serverId, serverId));
   }
 
-  async getFileById(fileId: string): Promise<BotFile | undefined> {
-    const [file] = await db.select().from(botFiles).where(eq(botFiles.id, fileId));
+  async getFileById(fileId: string): Promise<ServerFile | undefined> {
+    const [file] = await db.select().from(serverFiles).where(eq(serverFiles.id, fileId));
     return file;
   }
 
-  async createFile(fileData: InsertBotFile): Promise<BotFile> {
-    const [file] = await db.insert(botFiles).values(fileData).returning();
+  async createFile(fileData: InsertServerFile): Promise<ServerFile> {
+    const [file] = await db.insert(serverFiles).values(fileData).returning();
     return file;
   }
 
-  async updateFile(id: string, content?: string, filename?: string, path?: string): Promise<BotFile> {
+  async updateFile(id: string, content?: string, filename?: string, path?: string): Promise<ServerFile> {
     const updateData: any = { updatedAt: new Date() };
     if (content !== undefined) updateData.content = content;
     if (filename !== undefined) updateData.filename = filename;
     if (path !== undefined) updateData.path = path;
 
     const [file] = await db
-      .update(botFiles)
+      .update(serverFiles)
       .set(updateData)
-      .where(eq(botFiles.id, id))
+      .where(eq(serverFiles.id, id))
       .returning();
     return file;
   }
 
   async deleteFile(fileId: string): Promise<void> {
-    await db.delete(botFiles).where(eq(botFiles.id, fileId));
+    await db.delete(serverFiles).where(eq(serverFiles.id, fileId));
   }
 
-  async deleteFilesByBotId(botId: string): Promise<void> {
-    await db.delete(botFiles).where(eq(botFiles.botId, botId));
+  async deleteFilesByServerId(serverId: string): Promise<void> {
+    await db.delete(serverFiles).where(eq(serverFiles.serverId, serverId));
   }
 
   // Environment variables operations
-  async getEnvVarsByBotId(botId: string): Promise<BotEnvVar[]> {
-    return await db.select().from(botEnvVars).where(eq(botEnvVars.botId, botId));
+  async getEnvVarsByServerId(serverId: string): Promise<ServerEnvVar[]> {
+    return await db.select().from(serverEnvVars).where(eq(serverEnvVars.serverId, serverId));
   }
 
-  async getEnvVarById(id: string): Promise<BotEnvVar | undefined> {
-    const [envVar] = await db.select().from(botEnvVars).where(eq(botEnvVars.id, id));
+  async getEnvVarById(id: string): Promise<ServerEnvVar | undefined> {
+    const [envVar] = await db.select().from(serverEnvVars).where(eq(serverEnvVars.id, id));
     return envVar;
   }
 
-  async createEnvVar(envVar: InsertBotEnvVar & { value: string }): Promise<BotEnvVar> {
+  async createEnvVar(envVar: InsertServerEnvVar & { value: string }): Promise<ServerEnvVar> {
     const encryptedValue = this.encryptValue(envVar.value);
     const [created] = await db
-      .insert(botEnvVars)
+      .insert(serverEnvVars)
       .values({
         ...envVar,
         value: encryptedValue,
@@ -200,35 +200,35 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateEnvVar(id: string, value: string): Promise<BotEnvVar> {
+  async updateEnvVar(id: string, value: string): Promise<ServerEnvVar> {
     const encryptedValue = this.encryptValue(value);
     const [updated] = await db
-      .update(botEnvVars)
+      .update(serverEnvVars)
       .set({ value: encryptedValue, updatedAt: new Date() })
-      .where(eq(botEnvVars.id, id))
+      .where(eq(serverEnvVars.id, id))
       .returning();
     return updated;
   }
 
   async deleteEnvVar(id: string): Promise<void> {
-    await db.delete(botEnvVars).where(eq(botEnvVars.id, id));
+    await db.delete(serverEnvVars).where(eq(serverEnvVars.id, id));
   }
 
   // Runtime config operations
-  async getRuntimeConfig(botId: string): Promise<BotRuntimeConfig | undefined> {
+  async getRuntimeConfig(serverId: string): Promise<ServerRuntimeConfig | undefined> {
     const [config] = await db
       .select()
-      .from(botRuntimeConfigs)
-      .where(eq(botRuntimeConfigs.botId, botId));
+      .from(serverRuntimeConfigs)
+      .where(eq(serverRuntimeConfigs.serverId, serverId));
     return config;
   }
 
-  async upsertRuntimeConfig(config: InsertBotRuntimeConfig): Promise<BotRuntimeConfig> {
+  async upsertRuntimeConfig(config: InsertServerRuntimeConfig): Promise<ServerRuntimeConfig> {
     const [result] = await db
-      .insert(botRuntimeConfigs)
+      .insert(serverRuntimeConfigs)
       .values(config)
       .onConflictDoUpdate({
-        target: botRuntimeConfigs.botId,
+        target: serverRuntimeConfigs.serverId,
         set: {
           ...config,
           updatedAt: new Date(),
@@ -239,56 +239,56 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Runtime metrics operations
-  async createMetric(metric: InsertBotRuntimeMetric): Promise<BotRuntimeMetric> {
-    const [created] = await db.insert(botRuntimeMetrics).values(metric).returning();
+  async createMetric(metric: InsertServerRuntimeMetric): Promise<ServerRuntimeMetric> {
+    const [created] = await db.insert(serverRuntimeMetrics).values(metric).returning();
     return created;
   }
 
-  async getLatestMetrics(botId: string, limit: number = 50): Promise<BotRuntimeMetric[]> {
+  async getLatestMetrics(serverId: string, limit: number = 50): Promise<ServerRuntimeMetric[]> {
     return await db
       .select()
-      .from(botRuntimeMetrics)
-      .where(eq(botRuntimeMetrics.botId, botId))
-      .orderBy(desc(botRuntimeMetrics.collectedAt))
+      .from(serverRuntimeMetrics)
+      .where(eq(serverRuntimeMetrics.serverId, serverId))
+      .orderBy(desc(serverRuntimeMetrics.collectedAt))
       .limit(limit);
   }
 
   // Assets operations
-  async getAssetsByBotId(botId: string): Promise<BotAsset[]> {
-    return await db.select().from(botAssets).where(eq(botAssets.botId, botId));
+  async getAssetsByServerId(serverId: string): Promise<ServerAsset[]> {
+    return await db.select().from(serverAssets).where(eq(serverAssets.serverId, serverId));
   }
 
-  async getAssetById(id: string): Promise<BotAsset | undefined> {
-    const [asset] = await db.select().from(botAssets).where(eq(botAssets.id, id));
+  async getAssetById(id: string): Promise<ServerAsset | undefined> {
+    const [asset] = await db.select().from(serverAssets).where(eq(serverAssets.id, id));
     return asset;
   }
 
-  async createAsset(asset: InsertBotAsset): Promise<BotAsset> {
-    const [created] = await db.insert(botAssets).values(asset).returning();
+  async createAsset(asset: InsertServerAsset): Promise<ServerAsset> {
+    const [created] = await db.insert(serverAssets).values(asset).returning();
     return created;
   }
 
   async deleteAsset(id: string): Promise<void> {
-    await db.delete(botAssets).where(eq(botAssets.id, id));
+    await db.delete(serverAssets).where(eq(serverAssets.id, id));
   }
 
   // Packages operations
-  async getPackagesByBotId(botId: string): Promise<BotPackage[]> {
-    return await db.select().from(botPackages).where(eq(botPackages.botId, botId));
+  async getPackagesByServerId(serverId: string): Promise<ServerPackage[]> {
+    return await db.select().from(serverPackages).where(eq(serverPackages.serverId, serverId));
   }
 
-  async getPackageById(id: string): Promise<BotPackage | undefined> {
-    const [pkg] = await db.select().from(botPackages).where(eq(botPackages.id, id));
+  async getPackageById(id: string): Promise<ServerPackage | undefined> {
+    const [pkg] = await db.select().from(serverPackages).where(eq(serverPackages.id, id));
     return pkg;
   }
 
-  async createPackage(pkg: InsertBotPackage): Promise<BotPackage> {
-    const [created] = await db.insert(botPackages).values(pkg).returning();
+  async createPackage(pkg: InsertServerPackage): Promise<ServerPackage> {
+    const [created] = await db.insert(serverPackages).values(pkg).returning();
     return created;
   }
 
   async deletePackage(id: string): Promise<void> {
-    await db.delete(botPackages).where(eq(botPackages.id, id));
+    await db.delete(serverPackages).where(eq(serverPackages.id, id));
   }
 
   // Helper methods for encryption
