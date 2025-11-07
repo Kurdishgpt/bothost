@@ -117,9 +117,10 @@ export function GitHubIntegration({ botId }: { botId: string }) {
       for (const file of mockFiles) {
         try {
           const size = new Blob([file.content]).size;
-          await apiRequest(`/api/bots/${botId}/files`, {
+          const response = await fetch(`/api/bots/${botId}/files`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               filename: file.path.split('/').pop(),
               path: repo.path + (file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''),
@@ -127,6 +128,11 @@ export function GitHubIntegration({ botId }: { botId: string }) {
               size: `${(size / 1024).toFixed(2)} KB`,
             }),
           });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to create file: ${response.statusText}`);
+          }
+          
           successCount++;
         } catch (error) {
           console.error(`Failed to create file ${file.path}:`, error);
