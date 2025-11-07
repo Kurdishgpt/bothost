@@ -14,6 +14,7 @@ import {
   insertBotPackageSchema,
 } from "@shared/schema";
 import multer from "multer";
+import AdmZip from "adm-zip";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -25,6 +26,54 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
+
+  // Local admin login (for development/demo purposes)
+  app.post("/api/auth/local-login", async (req: any, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      // Get credentials from environment or use defaults (dev only)
+      const adminUsername = process.env.ADMIN_USERNAME || "admin1234";
+      const adminPassword = process.env.ADMIN_PASSWORD || "admin1234";
+      
+      if (username === adminUsername && password === adminPassword) {
+        // Create a simple admin user session
+        const adminUserId = "admin-user";
+        
+        // Upsert admin user in database
+        await storage.upsertUser({
+          id: adminUserId,
+          email: "admin@bothost.local",
+          firstName: "Admin",
+          lastName: "User",
+          profileImageUrl: null,
+        });
+        
+        // Create session compatible with isAuthenticated middleware
+        const mockUser = {
+          claims: {
+            sub: adminUserId,
+            email: "admin@bothost.local",
+            first_name: "Admin",
+            last_name: "User",
+          },
+          expires_at: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days
+        };
+        
+        req.login(mockUser, (err) => {
+          if (err) {
+            return res.status(500).json({ message: "Login failed" });
+          }
+          res.json({ message: "Login successful", user: mockUser.claims });
+        });
+      } else {
+        res.status(401).json({ message: "Invalid credentials" });
+      }
+    } catch (error) {
+      console.error("Error during local login:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
 
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
@@ -358,16 +407,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden" });
       }
       
-      // Unarchive logic: extract if it's an archive format
-      const archiveExtensions = /\.(zip|tar|gz|tgz|rar|7z)$/i;
-      if (!archiveExtensions.test(file.filename)) {
-        return res.status(400).json({ message: "File is not an archive" });
+      // Only support ZIP files for now
+      if (!file.filename.toLowerCase().endsWith('.zip')) {
+        return res.status(400).json({ message: "Only ZIP files are supported for extraction" });
       }
       
-      res.json({ message: "File unarchived successfully", file });
-    } catch (error) {
+      // Extract base64 content from data URL
+      let buffer: Buffer;
+      if (file.content.startsWith('data:')) {
+        const base64Data = file.content.split(';base64,')[1];
+        buffer = Buffer.from(base64Data, 'base64');
+      } else {
+        buffer = Buffer.from(file.content, 'utf-8');
+      }
+      
+      // Extract ZIP file
+      const zip = new AdmZip(buffer);
+      const zipEntries = zip.getEntries();
+      
+      const extractedFiles = [];
+      
+      // Get the base extraction path (same as the ZIP file's path)
+      const basePath = file.path.endsWith('/') ? file.path : file.path + '/';
+      
+      for (const entry of zipEntries) {
+        if (!entry.isDirectory) {
+          const entryData = entry.getData();
+          const entryName = entry.entryName;
+          
+          // Split entry name to get directory path and filename
+          const pathParts = entryName.split('/');
+          const filename = pathParts[pathParts.length - 1];
+          const directoryPath = pathParts.slice(0, -1).join('/');
+          
+          // Construct full path preserving directory structure
+          const fullPath = directoryPath 
+            ? basePath + directoryPath + '/'
+            : basePath;
+          
+          // Detect if file is binary or text
+          const textExtensions = /\.(js|ts|jsx|tsx|json|md|txt|html|css|py|java|cpp|c|h|sh|yml|yaml|xml|ini|conf|cfg|env|gitignore|dockerfile|makefile|toml|rs|go|rb|php|sql|graphql|vue|svelte|bat|ps1)$/i;
+          const hasTextExtension = textExtensions.test(filename);
+          
+          let content: string;
+          let isTextContent = false;
+          
+          if (hasTextExtension) {
+            try {
+              const decoded = entryData.toString('utf-8');
+              isTextContent = /^[\x09\x0A\x0D\x20-\x7E\x80-\xFF]*$/.test(decoded.substring(0, Math.min(1024, decoded.length)));
+              if (isTextContent) {
+                content = decoded;
+              }
+            } catch (e) {
+              isTextContent = false;
+            }
+          }
+          
+          if (!isTextContent) {
+            // Store as base64 data URL for binary files
+            const mimeType = filename.match(/\.(png|jpg|jpeg|gif|webp)$/i) 
+              ? 'image/' + filename.split('.').pop()?.toLowerCase()
+              : 'application/octet-stream';
+            content = `data:${mimeType};base64,${entryData.toString('base64')}`;
+          }
+          
+          // Create file entry with preserved directory structure
+          const fileData = insertBotFileSchema.parse({
+            botId: file.botId,
+            filename: filename,
+            path: fullPath,
+            content: content!,
+            size: `${(entryData.length / 1024).toFixed(2)} KB`
+          });
+          
+          const createdFile = await storage.createFile(fileData);
+          extractedFiles.push(createdFile);
+        }
+      }
+      
+      res.json({ 
+        message: `Extracted ${extractedFiles.length} files successfully`,
+        extractedFiles: extractedFiles.length,
+        files: extractedFiles
+      });
+    } catch (error: any) {
       console.error("Error unarchiving file:", error);
-      res.status(500).json({ message: "Failed to unarchive file" });
+      res.status(500).json({ message: error.message || "Failed to unarchive file" });
     }
   });
 

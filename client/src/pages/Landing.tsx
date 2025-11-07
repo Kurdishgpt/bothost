@@ -1,7 +1,61 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Bot, Shield, Zap, Code } from "lucide-react";
 
 export default function Landing() {
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { toast } = useToast();
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    try {
+      const response = await fetch("/api/auth/local-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Invalid credentials");
+      }
+
+      toast({
+        title: "Login successful",
+        description: "Redirecting to dashboard...",
+      });
+
+      // Redirect to dashboard
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 500);
+    } catch (error) {
+      toast({
+        title: "Login failed",
+        description: "Please check your credentials and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -12,9 +66,62 @@ export default function Landing() {
             </div>
             <h1 className="text-xl font-semibold">BotHost</h1>
           </div>
-          <Button onClick={() => (window.location.href = "/api/login")} data-testid="button-login">
-            Log In
-          </Button>
+          <Dialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-login">Log In</Button>
+            </DialogTrigger>
+            <DialogContent data-testid="dialog-login">
+              <DialogHeader>
+                <DialogTitle>Log In to BotHost</DialogTitle>
+                <DialogDescription>
+                  Enter your credentials to access your dashboard
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="admin1234"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    data-testid="input-username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="admin1234"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                    data-testid="input-password"
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={handleLogin}
+                  disabled={isLoggingIn || !username || !password}
+                  data-testid="button-submit-login"
+                >
+                  {isLoggingIn ? "Logging in..." : "Log In"}
+                </Button>
+                <div className="text-center text-sm text-muted-foreground">
+                  Or{" "}
+                  <button
+                    onClick={() => (window.location.href = "/api/login")}
+                    className="text-primary hover:underline"
+                    data-testid="link-replit-auth"
+                  >
+                    log in with Replit
+                  </button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
@@ -29,13 +136,13 @@ export default function Landing() {
               Upload your bot files, configure your Discord token, and keep your bots running 24/7 with real-time monitoring and automatic restarts.
             </p>
             <div className="pt-4">
-              <Button
-                size="lg"
-                onClick={() => (window.location.href = "/api/login")}
-                data-testid="button-get-started"
-              >
-                Get Started Free
-              </Button>
+              <Dialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="lg" data-testid="button-get-started">
+                    Get Started Free
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
             </div>
           </div>
         </div>
