@@ -29,7 +29,17 @@ class BotManager extends EventEmitter {
 
   constructor() {
     super();
+    this.initializeDiskCache();
     this.startMetricsCollection();
+  }
+
+  private async initializeDiskCache(): Promise<void> {
+    try {
+      const { stdout } = await execAsync('du -sm . 2>/dev/null || echo "0"');
+      this.cachedDiskMb = parseInt(stdout.trim().split('\t')[0]) || 0;
+    } catch (error) {
+      this.cachedDiskMb = 0;
+    }
   }
 
   async startBot(botId: string): Promise<void> {
