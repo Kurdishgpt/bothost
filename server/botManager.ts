@@ -2,6 +2,11 @@ import { Client, GatewayIntentBits } from "discord.js";
 import { storage } from "./storage";
 import type { Bot } from "@shared/schema";
 import { EventEmitter } from "events";
+import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 interface BotProcess {
   botId: string;
@@ -14,6 +19,18 @@ interface BotProcess {
 class BotManager extends EventEmitter {
   private processes: Map<string, BotProcess> = new Map();
   private readonly MAX_LOGS = 100;
+  private metricsInterval: NodeJS.Timeout | null = null;
+  private readonly METRICS_INTERVAL_MS = 15000; // 15 seconds
+  private cachedDiskMb: number = 0;
+  private diskCacheCount: number = 0;
+  private readonly DISK_CACHE_CYCLES = 12; // Update disk every 12 cycles (3 minutes)
+  private lastCpuUsage = process.cpuUsage();
+  private lastCpuTime = Date.now();
+
+  constructor() {
+    super();
+    this.startMetricsCollection();
+  }
 
   async startBot(botId: string): Promise<void> {
     const bot = await storage.getBotById(botId);
@@ -141,6 +158,80 @@ class BotManager extends EventEmitter {
       this.stopBot(botId)
     );
     await Promise.all(promises);
+    
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
+  }
+
+  private startMetricsCollection(): void {
+    this.metricsInterval = setInterval(async () => {
+      await this.collectMetrics();
+    }, this.METRICS_INTERVAL_MS);
+  }
+
+  private async collectMetrics(): Promise<void> {
+    const activeBots = Array.from(this.processes.keys()).filter(
+      (botId) => this.getStatus(botId) === "online"
+    );
+
+    if (activeBots.length === 0) {
+      return;
+    }
+
+    const metrics = await this.getSystemMetrics();
+    
+    for (const botId of activeBots) {
+      try {
+        await storage.createMetric({
+          botId,
+          cpuPercent: metrics.cpu / activeBots.length,
+          memoryMb: metrics.memory / activeBots.length,
+          diskMb: metrics.disk,
+        });
+        
+        this.emit("metrics", { botId, metrics: {
+          cpu: metrics.cpu / activeBots.length,
+          memory: metrics.memory / activeBots.length,
+          disk: metrics.disk,
+        }});
+      } catch (error) {
+        console.error(`Error storing metrics for bot ${botId}:`, error);
+      }
+    }
+  }
+
+  private async getSystemMetrics(): Promise<{ cpu: number; memory: number; disk: number }> {
+    const memoryUsage = process.memoryUsage();
+    const memoryMb = memoryUsage.heapUsed / 1024 / 1024;
+
+    const now = Date.now();
+    const currentCpuUsage = process.cpuUsage(this.lastCpuUsage);
+    const elapsedMs = now - this.lastCpuTime;
+    
+    const totalCpuMs = (currentCpuUsage.user + currentCpuUsage.system) / 1000;
+    const cpuPercent = Math.min(100, (totalCpuMs / elapsedMs) * 100);
+    
+    this.lastCpuUsage = process.cpuUsage();
+    this.lastCpuTime = now;
+
+    this.diskCacheCount++;
+    if (this.diskCacheCount >= this.DISK_CACHE_CYCLES) {
+      try {
+        const { stdout } = await execAsync('du -sm . 2>/dev/null || echo "0"');
+        this.cachedDiskMb = parseInt(stdout.trim().split('\t')[0]) || 0;
+      } catch (error) {
+        this.cachedDiskMb = 0;
+      }
+      this.diskCacheCount = 0;
+    }
+
+    return {
+      cpu: Math.round(cpuPercent * 100) / 100,
+      memory: Math.round(memoryMb * 100) / 100,
+      disk: this.cachedDiskMb,
+    };
   }
 }
 
