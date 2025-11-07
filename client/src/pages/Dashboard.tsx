@@ -1,135 +1,173 @@
-import { useState } from "react";
+// Dashboard with real authentication and data - referenced from blueprint:javascript_log_in_with_replit
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { isUnauthorizedError } from "@/lib/authUtils";
 import { BotCard, type Bot } from "@/components/BotCard";
 import { StatsCard } from "@/components/StatsCard";
 import { AddBotDialog } from "@/components/AddBotDialog";
-import { LogsDialog } from "@/components/LogsDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Bot as BotIcon, Activity, Clock, Zap } from "lucide-react";
+import { Bot as BotIcon, Activity, Clock, Zap, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {  Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { BotStatus } from "@/components/StatusIndicator";
 
 export default function Dashboard() {
-  // TODO: remove mock functionality
-  const [bots, setBots] = useState<Bot[]>([
-    {
-      id: "1",
-      name: "Music Bot",
-      status: "online",
-      uptime: "2d 5h 32m",
-      memoryUsage: "128 MB",
-      lastRestart: "2 days ago",
-    },
-    {
-      id: "2",
-      name: "Moderation Bot",
-      status: "online",
-      uptime: "5d 12h 8m",
-      memoryUsage: "64 MB",
-      lastRestart: "5 days ago",
-    },
-    {
-      id: "3",
-      name: "Welcome Bot",
-      status: "offline",
-      uptime: "0m",
-      memoryUsage: "0 MB",
-      lastRestart: "1 hour ago",
-    },
-    {
-      id: "4",
-      name: "Utility Bot",
-      status: "starting",
-      uptime: "0m",
-      memoryUsage: "32 MB",
-      lastRestart: "Just now",
-    },
-  ]);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [selectedBot, setSelectedBot] = useState<Bot | null>(null);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-
-  const mockLogs = [
-    { timestamp: "2024-01-15 14:23:45", level: "info" as const, message: "Bot started successfully" },
-    { timestamp: "2024-01-15 14:23:46", level: "info" as const, message: "Connected to Discord gateway" },
-    { timestamp: "2024-01-15 14:23:47", level: "info" as const, message: `Logged in as ${selectedBot?.name || 'Bot'}#1234` },
-    { timestamp: "2024-01-15 14:24:12", level: "warn" as const, message: "High memory usage detected: 256MB" },
-    { timestamp: "2024-01-15 14:25:33", level: "info" as const, message: "Command received: /play" },
-    { timestamp: "2024-01-15 14:26:01", level: "error" as const, message: "Failed to connect to voice channel: Permission denied" },
-  ];
-
-  const activeBots = bots.filter((bot) => bot.status === "online").length;
-  const totalUptime = "12d 8h";
-
-  const handleStart = (botId: string) => {
-    console.log("Starting bot:", botId);
-    setBots((prev) =>
-      prev.map((bot) =>
-        bot.id === botId ? { ...bot, status: "starting" as const } : bot
-      )
-    );
-    setTimeout(() => {
-      setBots((prev) =>
-        prev.map((bot) =>
-          bot.id === botId ? { ...bot, status: "online" as const, uptime: "1m" } : bot
-        )
-      );
-    }, 2000);
-  };
-
-  const handleStop = (botId: string) => {
-    console.log("Stopping bot:", botId);
-    setBots((prev) =>
-      prev.map((bot) =>
-        bot.id === botId ? { ...bot, status: "offline" as const, uptime: "0m" } : bot
-      )
-    );
-  };
-
-  const handleRestart = (botId: string) => {
-    console.log("Restarting bot:", botId);
-    setBots((prev) =>
-      prev.map((bot) =>
-        bot.id === botId ? { ...bot, status: "starting" as const } : bot
-      )
-    );
-    setTimeout(() => {
-      setBots((prev) =>
-        prev.map((bot) =>
-          bot.id === botId ? { ...bot, status: "online" as const } : bot
-        )
-      );
-    }, 2000);
-  };
-
-  const handleViewLogs = (botId: string) => {
-    const bot = bots.find((b) => b.id === botId);
-    if (bot) {
-      setSelectedBot(bot);
-      setLogsDialogOpen(true);
+  // Redirect if not authenticated - referenced from blueprint:javascript_log_in_with_replit
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
     }
-  };
+  }, [isAuthenticated, authLoading, toast]);
 
-  const handleSettings = (botId: string) => {
-    console.log("Opening settings for bot:", botId);
-  };
+  const { data: bots = [] } = useQuery<Bot[]>({
+    queryKey: ["/api/bots"],
+    enabled: isAuthenticated,
+  });
 
-  const handleDelete = (botId: string) => {
-    console.log("Deleting bot:", botId);
-    setBots((prev) => prev.filter((bot) => bot.id !== botId));
-  };
+  const addBotMutation = useMutation({
+    mutationFn: async (newBot: { name: string; token: string; description: string }) => {
+      await apiRequest("POST", "/api/bots", newBot);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+      toast({ title: "Bot added successfully" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Failed to add bot", variant: "destructive" });
+    },
+  });
 
-  const handleAddBot = (newBot: { name: string; token: string; description: string }) => {
-    console.log("Adding new bot:", newBot);
-    const bot: Bot = {
-      id: String(Date.now()),
-      name: newBot.name,
-      status: "offline",
-      uptime: "0m",
-      memoryUsage: "0 MB",
-    };
-    setBots((prev) => [...prev, bot]);
-  };
+  const startMutation = useMutation({
+    mutationFn: async (botId: string) => {
+      await apiRequest("POST", `/api/bots/${botId}/start`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+      toast({ title: "Bot is starting..." });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Failed to start bot", variant: "destructive" });
+    },
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: async (botId: string) => {
+      await apiRequest("POST", `/api/bots/${botId}/stop`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+      toast({ title: "Bot stopped" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Failed to stop bot", variant: "destructive" });
+    },
+  });
+
+  const restartMutation = useMutation({
+    mutationFn: async (botId: string) => {
+      await apiRequest("POST", `/api/bots/${botId}/restart`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+      toast({ title: "Bot is restarting..." });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Failed to restart bot", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (botId: string) => {
+      await apiRequest("DELETE", `/api/bots/${botId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+      toast({ title: "Bot deleted successfully" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Failed to delete bot", variant: "destructive" });
+    },
+  });
+
+  const activeBots = bots.filter((bot: any) => bot.runtimeStatus === "online" || bot.status === "online").length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -142,8 +180,24 @@ export default function Dashboard() {
             <h1 className="text-xl font-semibold">BotHost</h1>
           </div>
           <div className="flex items-center gap-2">
-            <AddBotDialog onAddBot={handleAddBot} />
+            <AddBotDialog onAddBot={(bot) => addBotMutation.mutate(bot)} />
             <ThemeToggle />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={user?.profileImageUrl || ""} alt={user?.email || ""} className="object-cover" />
+                    <AvatarFallback>{user?.firstName?.[0] || user?.email?.[0] || "U"}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => (window.location.href = "/api/logout")} data-testid="button-logout">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Log Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -174,50 +228,48 @@ export default function Dashboard() {
                 />
                 <StatsCard
                   title="Total Uptime"
-                  value={totalUptime}
+                  value="--"
                   icon={Clock}
                   description="Combined uptime"
                 />
                 <StatsCard
                   title="Restarts Today"
-                  value={3}
+                  value="--"
                   icon={Zap}
-                  description="2 automatic"
+                  description="Automatic restarts"
                 />
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-4">Your Bots</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {bots.map((bot) => (
+                  {bots.map((bot: any) => (
                     <BotCard
                       key={bot.id}
-                      bot={bot}
-                      onStart={handleStart}
-                      onStop={handleStop}
-                      onRestart={handleRestart}
-                      onViewLogs={handleViewLogs}
-                      onSettings={handleSettings}
-                      onDelete={handleDelete}
+                      bot={{
+                        id: bot.id,
+                        name: bot.name,
+                        status: (bot.runtimeStatus || bot.status) as BotStatus,
+                        uptime: bot.uptime ? `${Math.floor(bot.uptime / 1000 / 60)}m` : "0m",
+                        memoryUsage: "-- MB",
+                        lastRestart: bot.updatedAt ? new Date(bot.updatedAt).toLocaleDateString() : "--",
+                      }}
+                      onStart={(id) => startMutation.mutate(id)}
+                      onStop={(id) => stopMutation.mutate(id)}
+                      onRestart={(id) => restartMutation.mutate(id)}
+                      onViewLogs={(id) => setLocation(`/bots/${id}`)}
+                      onSettings={(id) => setLocation(`/bots/${id}`)}
+                      onDelete={(id) => deleteMutation.mutate(id)}
                     />
                   ))}
                 </div>
               </div>
             </>
           ) : (
-            <EmptyState onAddBot={() => setAddDialogOpen(true)} />
+            <EmptyState onAddBot={() => {}} />
           )}
         </div>
       </main>
-
-      {selectedBot && (
-        <LogsDialog
-          open={logsDialogOpen}
-          onOpenChange={setLogsDialogOpen}
-          botName={selectedBot.name}
-          logs={mockLogs}
-        />
-      )}
     </div>
   );
 }
