@@ -587,6 +587,15 @@ export function EnhancedFileManager({
                           <Download className="w-4 h-4 mr-2" />
                           Download
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          toast({
+                            title: "Unarchive",
+                            description: `Unarchive functionality for ${file.filename} will be available soon.`,
+                          });
+                        }}>
+                          <FolderInput className="w-4 h-4 mr-2" />
+                          Unarchive
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onDeleteFile?.(file.id)}
                           className="text-destructive"
